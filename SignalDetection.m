@@ -41,7 +41,7 @@ classdef SignalDetection < handle
                 obj.falseAlarms * k, obj.correctRejections * k);
         end
 
-        function plot_sdt = plot_sdt(obj)
+        function plot_sdt(obj)
             x = linspace(-4,4,200);
             Noise = normpdf(x, 0, 1);
             Signal = normpdf(x,obj.d_prime(),1);
@@ -63,7 +63,7 @@ classdef SignalDetection < handle
         
     end
     
-    methods (Static) %plot_roc, roc_curve, fit_roc, roc_loss
+    methods (Static) 
         function sdtList = simulate(dprime, criteriaList,signalcount, noiseCount)
             sdtList = [];
             for i=1:length(criteriaList)
@@ -81,8 +81,7 @@ classdef SignalDetection < handle
             end
         end
         
-        function plot_roc = plot_roc(sdtList)
-            figure
+        function plot_roc(sdtList)
             hold on;
            for i=1:length(sdtList)
                sdt = sdtList(i);
@@ -99,45 +98,41 @@ classdef SignalDetection < handle
            title('ROC Curve')
         end
         
-        function hit_rate = roc_curve(false_alarm_rate, a)
+        function hit_rate = rocCurve(false_alarm_rate, a)
             hit_rate = zeros(1, length(false_alarm_rate));
             for i =1:length(false_alarm_rate)
              hit_rate = normcdf(a + norminv(false_alarm_rate));
             end
-         %dleted loop here, revert if not fixed
         end 
 
         function L = rocLoss(a, sdtList)
             ell = [];
             for i=1:length(sdtList)
                 FA_rate = FA(sdtList(i));
-                hit_rate = SignalDetection.roc_curve(FA_rate, a);
+                hit_rate = SignalDetection.rocCurve(FA_rate, a);
             
                 ell = [ell; nLogLikelihood(sdtList(i), hit_rate, FA_rate)];
             end
              L = sum(ell);
         end
 
-        function fit_roc = fit_roc(sdtList) %use fminsearch() here
+        function fit_roc = fit_roc(sdtList) 
             fun = @(a) SignalDetection.rocLoss(a,sdtList);
             
             start = 0;
             fit_roc = fminsearch(fun,start);
             
-            disp(fun)
-
             x = linspace(0,1);
-            y = SignalDetection.roc_curve(x, fit_roc);
-            %disp(hit_rate)
+            y = SignalDetection.rocCurve(x, fit_roc);
             SignalDetection.plot_roc(sdtList)
             hold on;
             plot(x, y)
         end
-        
+
         function obj = load(filename)
             saved = load(filename);
             obj = saved.obj;
         end
-        %}
     end
+
 end
