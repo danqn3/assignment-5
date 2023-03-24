@@ -1,60 +1,59 @@
 classdef Metropolis
     properties
-        logTarget, initialState, samples, proposalStd
+        samples
     end
     
-    methods (Access = private)
-        function yesno = accept(self, proposal)
-            alpha = exp(self.logTarget(proposal) - self.logTarget(self.initialState));
-            if rand < alpha
-                self.initialState = proposal;
-                yesno = true;
-            else
-                yesno = false;
-            end
-        end
-    end  
-
+    properties (Access = private)
+        logTarget
+        state
+        sigma
+        acceptCount
+        totalCount
+    end
+    
     methods
-        function obj = Metropolis(logTarget, initialState)
-            obj.logTarget = logTarget;
-            obj.initialState = initialState;
+        function self = Metropolis(logTarget, initialState)
+            self.logTarget = logTarget;
+            self.state = initialState;
+            self.sigma = 1;
+            self.acceptCount = 0;
+            self.totalCount = 0;
+        end
+        
+        function self = adapt(self, blockLengths)
+            targetRate = 0.4;
+            for blockLength = blockLengths
+                acceptances = 0;
+                for i = 1:blockLength
+                    proposal = self.state + self.sigma * randn;
+                    if self.accept(proposal)
+                        self.state = proposal;
+                        acceptances = acceptances + 1;
+                    end
+                    self.totalCount = self.totalCount + 1;
+                end
+                acceptanceRate = acceptances / blockLength;
+                if acceptanceRate > targetRate
+                    self.sigma = self.sigma * exp(1 / sqrt(self.totalCount));
+                else
+                    self.sigma = self.sigma / exp(1 / sqrt(self.totalCount));
+                end
+                self.acceptCount = self.acceptCount + acceptances;
+            end
         end
         
         function self = sample(self, n)
-            samples = zeros(n, 1);
-            current = self.initialState;
+            self.samples = zeros(n, 1);
             for i = 1:n
-                proposal = normrnd(current, self.proposalStd);
+                proposal = self.state + self.sigma * randn;
                 if self.accept(proposal)
-                    current = proposal;
+                    self.state = proposal;
                 end
-                samples(i) = current;
+                self.samples(i) = self.state;
+                self.totalCount = self.totalCount + 1;
             end
-            self.initialState = current;
-            self.samples = samples;
         end
-
-        function self = adapt(self, blockLengths)
-            sigma = 1;
-            acceptance_target = 0.4;
         
-            for i = 1:length(blockLengths)
-                current_state = self.initialState;
-                num_proposals = blockLengths(i);
-                proposals = arrayfun(@(x) normrnd(x, sigma), repmat(current_state, num_proposals, 1));
-                acceptance_probs = min(1, exp(self.logTarget(proposals) - self.logTarget(current_state)));
-                acceptance_rate = sum(rand(num_proposals, 1) < acceptance_probs) / num_proposals;
-                if acceptance_rate < acceptance_target
-                    sigma = sigma * 0.9;
-                else
-                    sigma = sigma * 1.1;
-                end
-                self.proposalStd = sigma;
-                self.initialState = proposals(end);
-            end
-        end
-
         function summ = summary(self)
             sortedSamples = sort(self.samples);
             m = mean(sortedSamples);
@@ -62,6 +61,18 @@ classdef Metropolis
             summ.mean = m;
             summ.c025 = ci(1);
             summ.c975 = ci(2);
+        end
+    end
+    
+    methods (Access = private)
+        function yesno = accept(self, proposal)
+            logRatio = self.logTarget(proposal) - self.logTarget(self.state);
+            if logRatio > log(rand)
+                self.acceptCount = self.acceptCount + 1;
+                yesno = true;
+            else
+                yesno = false;
+            end
         end
     end
 end
